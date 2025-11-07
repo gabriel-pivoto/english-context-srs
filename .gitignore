@@ -1,0 +1,11 @@
+.next/
+.turbo/
+node_modules/
+pnpm-debug.log*
+.env
+dist/
+coverage/
+playwright-report/
+test-results/
+*.local
+*.log

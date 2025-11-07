@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Item {
+  id          String   @id @default(cuid())
+  type        ItemType
+  prompt      String
+  choices     Json?
+  answer      String
+  explanation String?
+  lemma       String?
+  ease        Float    @default(2.5)
+  interval    Int      @default(0)
+  due         DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  reviews     Review[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  itemId    String
+  grade     Int
+  createdAt DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+enum ItemType {
+  CLOZE
+  VOCAB
+}

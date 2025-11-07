@@ -1,0 +1,64 @@
+{
+  "name": "english-context-srs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-only English study app with Next.js, Prisma, and Gemini.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3005",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "test": "vitest run",
+    "migrate:deploy": "prisma migrate deploy",
+    "e2e": "playwright test",
+    "postinstall": "pnpm prisma generate || echo \"Prisma generate skipped\""
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "0.17.1",
+    "@prisma/client": "5.16.1",
+    "@tanstack/react-query": "5.59.0",
+    "class-variance-authority": "0.7.0",
+    "@radix-ui/react-slot": "1.2.4",
+    "clsx": "2.1.1",
+    "next": "15.0.0-canary.36",
+    "react": "19.0.0-rc.0",
+    "react-dom": "19.0.0-rc.0",
+    "tailwind-merge": "2.2.1",
+    "tailwindcss-animate": "1.0.7",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.8.0",
+    "@next/eslint-plugin-next": "15.0.0-canary.36",
+    "@types/node": "20.14.2",
+    "@types/react": "18.3.2",
+    "@types/react-dom": "18.3.0",
+    "@typescript-eslint/eslint-plugin": "8.7.0",
+    "@typescript-eslint/parser": "8.7.0",
+    "autoprefixer": "10.4.20",
+    "eslint": "9.8.0",
+    "eslint-plugin-react-hooks": "5.0.0",
+    "eslint-plugin-react-refresh": "0.4.7",
+    "playwright": "1.45.0",
+    "globals": "13.24.0",
+    "postcss": "8.4.41",
+    "prettier": "3.3.2",
+    "prisma": "5.16.1",
+    "tailwindcss": "3.4.7",
+    "ts-node": "10.9.2",
+    "tslib": "2.6.3",
+    "tsx": "4.7.0",
+    "typescript": "5.5.4",
+    "vitest": "1.5.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
