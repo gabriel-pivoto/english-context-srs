@@ -7,8 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  createdAt DateTime  @default(now())
+  profile   Profile?
+  contexts  Context[]
+  items     Item[]
+  reviews   Review[]
+}
+
+model Profile {
+  id     String  @id @default(cuid())
+  userId String  @unique
+  level  String?
+  native String?
+  target String?
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Context {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  level     String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     Item[]
+
+  @@index([userId, title])
+}
+
 model Item {
   id          String   @id @default(cuid())
+  userId      String
+  contextId   String
   type        ItemType
   prompt      String
   choices     Json?
@@ -20,16 +55,38 @@ model Item {
   due         DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  context     Context   @relation(fields: [contextId], references: [id], onDelete: Cascade)
   reviews     Review[]
+
+  @@index([userId, due])
+  @@index([contextId])
 }
 
 model Review {
   id        String   @id @default(cuid())
   itemId    String
+  userId    String
   grade     Int
   createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model EmailToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  requestIp String?
+
+  @@index([email])
+  @@index([expiresAt])
+  @@index([requestIp])
 }
 
 enum ItemType {

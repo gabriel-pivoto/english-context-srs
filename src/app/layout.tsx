@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "./providers";
+import { AppShell, type ClientUser } from "../components/AppShell";
+import { getUserFromCookies } from "../lib/auth";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,14 +16,27 @@ export const metadata: Metadata = {
   description: "Local-only SRS powered by Gemini for contextual English practice.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const sessionUser = await getUserFromCookies();
+  const clientUser: ClientUser | null = sessionUser
+    ? {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        profile: sessionUser.profile
+          ? {
+              level: sessionUser.profile.level ?? null,
+              native: sessionUser.profile.native ?? null,
+              target: sessionUser.profile.target ?? null,
+            }
+          : null,
+      }
+    : null;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-background text-foreground`}>
         <Providers>
-          <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-16 pt-10">
-            {children}
-          </main>
+          <AppShell user={clientUser}>{children}</AppShell>
         </Providers>
       </body>
     </html>
