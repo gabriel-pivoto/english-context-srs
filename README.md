@@ -21,16 +21,13 @@ A local-first study companion that turns your daily situations into contextual E
 
 ---
 
-## Features
-
-- **Context-driven sessions** – Describe today’s scenario (“airport check-in,” “coffee break stand-up meeting”) and choose a CEFR level. The app asks Gemini for curated cloze/vocab items tailored to that scenario.
-- **Mixed practice** – Cloze cards show a sentence with a blank and three options; vocabulary cards test meaning/translation plus example sentences.
-- **Immediate feedback + SM‑2 grading** – After each item, pick Again/Hard/Good/Easy; scheduling uses a simplified SM‑2 algorithm and stores reviews for history.
-- **Local-only data** – Prisma + PostgreSQL keep every item, review, and schedule on your machine.
-- **Tailwind + shadcn UI** – Focused, keyboard-friendly interface with sensible defaults (hotkeys for answers/grades).
-- **Adminer bundled** – Inspect the database at `http://localhost:85` without extra setup.
-- **Fully containerized** – `docker compose up --build -d` starts Postgres, Adminer, and the Next.js app; migrations + seed happen automatically.
-- **Gemini guardrails** – Automatic retries + JSON sanitization keep invalid model responses under control (and emit actionable errors when something goes wrong).
+- **Email magic link auth (hardened)** – Tokens are hashed-at-rest, rate-limited per email + IP, and can be delivered via SMTP or Resend. `/api/*` routes stay behind JWT middleware.
+- **Context library sidebar** – Search, filter, and jump across multi-user contexts. Each context tracks due counts, activity, and total cards.
+- **Context editors** – Edit titles/notes/levels, batch delete or regenerate questions, and call Gemini (or its deterministic mock) to add new cloze/vocab cards per context.
+- **Study filters + SM-2** – `/study` now respects context filters, surfaces per-card metadata (context, ease, interval, due date), and keeps keyboard shortcuts for fast grading.
+- **Analytics dashboard** – Ease and interval histograms, daily review counts, accuracy %, and lapse totals rendered with Recharts once you opt in below the fold.
+- **Local-first data** – Prisma + PostgreSQL persist everything on your machine; Adminer is bundled at `http://localhost:85` for quick inspections.
+- **Playwright e2e coverage** – Auth happy/error paths, review flow, contexts CRUD, and Adminer availability are covered in `pnpm e2e`, with a dev-only `/api/dev/last-email` helper.
 
 ---
 
@@ -51,7 +48,7 @@ A local-first study companion that turns your daily situations into contextual E
                        Gemini API
 ```
 
-- **App Router (Next.js 15)** organizes pages (`/` for generation, `/study` for due cards) and API routes (`/api/generate`, `/api/due`, `/api/review`).
+- **App Router (Next.js 15)** organizes pages (hero generator, `/study`, `/contexts/[id]`, `/login`) and API routes (`/api/auth/*`, `/api/contexts/*`, `/api/due`, `/api/review`, `/api/analytics/overview`).
 - **Prisma** defines the schema (`Item`, `Review`, `ItemType`) and exposes a type-safe client. `docker-entrypoint.sh` runs `prisma migrate deploy` and seeds sample data automatically.
 - **Gemini client** (`src/lib/gemini.ts`) wraps the Google Generative AI SDK with:
   - Hard prompts for cloze & vocab generation
@@ -134,11 +131,28 @@ The dev server listens on `http://localhost:3005`. Ensure the `.env` matches you
 
 | Variable        | Description                                                                      |
 |-----------------|----------------------------------------------------------------------------------|
-| `GEMINI_API_KEY`| Required. Google AI Studio key.                                                  |
+| `GEMINI_API_KEY`| Required in production. Google AI Studio key.                                    |
 | `GEMINI_MODEL`  | Gemini model ID (e.g., `gemini-1.5-flash-latest`).                               |
 | `DATABASE_URL`  | Postgres connection string. In Docker, defaults to `postgres:5432`.              |
 | `ADMINER_PORT`  | Optional. Host port for Adminer (default `85`).                                  |
+| `JWT_SECRET`    | HS256 secret used to sign the session JWT cookie.                                |
+| `APP_BASE_URL`  | Base URL for building magic links (e.g., `http://localhost:3005`).               |
+| `MAIL_FROM`     | Email sender shown in magic link emails.                                         |
+| `SMTP_URL`      | Optional SMTP connection string (e.g., `smtp://user:pass@smtp.server.com:587`).  |
+| `RESEND_API_KEY`| Alternative to SMTP. If set, messages are sent via Resend’s API (great on Vercel).|
+| `ALLOW_DEV_EMAIL_FALLBACK` | Set to `1` to allow the JSON/dev transport even when `NODE_ENV=production` (useful for previews/tests only). |
+| `MOCK_GEMINI`   | Set to `1` to use deterministic mock data instead of calling Gemini (ideal for tests). |
 | `SKIP_PRISMA_SEED` | Set to `1` to skip the seed step in the entrypoint (useful for large datasets).|
+
+> Dev tip: `/api/dev/last-email` returns the last magic link token while `NODE_ENV !== "production"`, which powers the Playwright auth tests.
+
+---
+
+### Email delivery (SMTP or Resend)
+
+- **Production**: set either `SMTP_URL` *or* `RESEND_API_KEY`. On Vercel, the quickest path is enabling [Resend](https://resend.com/) and pasting the API key into your project env vars so `/api/auth/request` can send real emails.
+- **Local / Preview / CI**: if neither env var is set you can opt in to the JSON transport by setting `ALLOW_DEV_EMAIL_FALLBACK=1`. This is already enabled for `pnpm dev` and the CI workflow.
+- `/api/dev/last-email` only works when the fallback is enabled, so secrets are not leaked on production deployments.
 
 ---
 
@@ -162,9 +176,37 @@ Adminer (`http://localhost:85`) is available for quick inspection and manual twe
 |--------------|----------------------------------------------|
 | `pnpm lint`  | ESLint (Next + TS + React hooks).            |
 | `pnpm test`  | Vitest (currently covers SM‑2 scheduler).    |
-| `pnpm e2e`   | Playwright smoke script (mocks Gemini, navigates flow). |
+| `pnpm e2e`   | Playwright suite (auth happy/error paths, review flow, contexts CRUD, Adminer check). |
 
-> Tip: run `pnpm e2e` when no other dev server is occupying ports. The script starts its own Next.js instance on a random available port, mocks the API, selects a card, and grades it.
+> Tip: run `docker compose up -d` and `pnpm dev` before `pnpm e2e`. The tests rely on the dev-only `/api/dev/last-email` route and the seeded `demo@example.com` account.
+
+---
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on pushes/PRs to `main`/`master`:
+
+1. Boots PostgreSQL 16 as a service.
+2. Installs dependencies with pnpm, runs `prisma migrate deploy` + `db:seed`.
+3. Executes `pnpm lint`, `pnpm test`, and `pnpm build` with production-like env vars (mock Gemini + dev email fallback).
+
+This keeps schema, tests, and the production build in sync with every commit.
+
+---
+
+## Deploying to Vercel
+
+1. **Provision Postgres** (Neon, Supabase, Vercel Postgres, etc.) and copy the `DATABASE_URL`.
+2. **Configure env vars** in the Vercel dashboard:
+   - `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`
+   - `JWT_SECRET` (32+ bytes), `APP_BASE_URL` (e.g., `https://english-context-srs.vercel.app`)
+   - `MAIL_FROM`, plus either `RESEND_API_KEY` *or* `SMTP_URL`
+   - Optional: `MOCK_GEMINI=0` (use real Gemini), `ALLOW_DEV_EMAIL_FALLBACK=0`
+3. **Apply migrations** locally against the hosted database:  
+   `DATABASE_URL=... pnpm prisma migrate deploy && pnpm db:seed`
+4. **Connect the GitHub repo to Vercel** and let it build with `pnpm build`.
+
+Resend is the easiest email provider on Vercel—install the integration, grab the API key, and you have production-ready magic links without running SMTP infrastructure.
 
 ---
 
@@ -173,7 +215,7 @@ Adminer (`http://localhost:85`) is available for quick inspection and manual twe
 1. **Home (`/`)**
    - Badge row communicates “Local-first · Single learner · Gemini assisted”.
    - `GenerateForm.tsx` contains context textarea, CEFR level select, and optional counts.
-   - Submission hits `/api/generate` → `generateClozeAndVocab` → `Gemini`.
+  - Submission hits `POST /api/contexts` which validates with Zod, stores the context, and (optionally) calls Gemini to seed cards.
    - Results saved in `Item` table; duplicates removed by lemma/prompt.
    - Success panel links to `/study`.
 
@@ -185,7 +227,7 @@ Adminer (`http://localhost:85`) is available for quick inspection and manual twe
    - When no items are due, shows a “Nothing due right now” state.
 
 3. **API routes**
-   - `POST /api/generate`: validates input with Zod, calls Gemini for cloze + vocab, sanitizes JSON, inserts non-duplicate items.
+  - `POST /api/contexts`: validates input, creates the context, invokes Gemini (or the mock generator) and inserts non-duplicate items tied to the user.
    - `GET /api/due`: returns the oldest `Item` whose `due` ≤ now.
    - `POST /api/review`: updates ease/interval/due via SM‑2, logs `Review`.
 

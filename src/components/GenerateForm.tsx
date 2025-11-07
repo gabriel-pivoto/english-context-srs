@@ -1,30 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import type { FormEvent } from "react";
+import { useState } from "react";
 import { LevelSchema } from "../lib/zod";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
 const levels = LevelSchema.options;
 
-type GenerateResponse = {
-  createdCloze: number;
-  createdVocab: number;
-  skipped: number;
+type CreateContextResponse = {
+  context: {
+    id: string;
+    title: string;
+    level: string;
+  };
+  stats: {
+    createdCloze: number;
+    createdVocab: number;
+    skipped: number;
+  };
 };
 
 export function GenerateForm() {
-  const [context, setContext] = useState("");
+  const [title, setTitle] = useState("");
+  const [scenario, setScenario] = useState("");
   const [level, setLevel] = useState<(typeof levels)[number]>("A2");
-  const [nCloze, setNCloze] = useState(8);
-  const [nVocab, setNVocab] = useState(8);
+  const [nCloze, setNCloze] = useState(6);
+  const [nVocab, setNVocab] = useState(6);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<GenerateResponse | null>(null);
+  const [result, setResult] = useState<CreateContextResponse | null>(null);
 
   const disableSubmit =
-    isSubmitting || context.trim().length < 3 || nCloze <= 0 || nVocab <= 0;
+    isSubmitting || title.trim().length < 3 || scenario.trim().length < 10;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,24 +44,31 @@ export function GenerateForm() {
     setResult(null);
 
     try {
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/contexts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context,
+          title,
+          description: scenario,
           level,
           nCloze,
           nVocab,
         }),
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Failed to generate items.");
+      if (response.status === 401) {
+        throw new Error("Sign in to generate personalized decks.");
       }
 
-      const data = (await response.json()) as GenerateResponse;
-      setResult(data);
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Failed to create context.");
+      }
+
+      const payload = (await response.json()) as CreateContextResponse;
+      setResult(payload);
+      setTitle("");
+      setScenario("");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unexpected error. Please try again.";
@@ -65,30 +81,44 @@ export function GenerateForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-6 rounded-xl border border-border bg-secondary/40 p-6 shadow-lg"
+      className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur"
     >
       <div className="flex flex-col gap-2">
-        <label htmlFor="context" className="text-sm font-semibold uppercase tracking-wide">
-          Daily context
+        <label htmlFor="title" className="text-xs font-semibold uppercase tracking-wide text-primary/80">
+          Context title
+        </label>
+        <input
+          id="title"
+          name="title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder='Example: "Airport check-in with a large suitcase"'
+          className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-base text-white shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/40"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="scenario" className="text-xs font-semibold uppercase tracking-wide text-primary/80">
+          Describe the situation
         </label>
         <textarea
-          id="context"
-          name="context"
+          id="scenario"
+          name="scenario"
           required
           rows={4}
-          value={context}
-          onChange={(event) => setContext(event.target.value)}
-          placeholder='Example: "Airport check-in with a large suitcase"'
-          className="rounded-lg border border-border bg-background/70 px-3 py-2 text-base shadow-sm transition hover:border-primary/60 focus:border-primary"
+          value={scenario}
+          onChange={(event) => setScenario(event.target.value)}
+          placeholder='Explain what you want to practice. Example: "Checking in a suitcase that is overweight and negotiating with the attendant."'
+          className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-base text-white shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/40"
         />
-        <p className="text-sm text-muted-foreground">
-          Describe the situation you want to practice in one or two sentences.
+        <p className="text-sm text-slate-300">
+          Give 1-2 sentences so the generator can build realistic prompts for you.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="flex flex-col gap-2">
-          <label htmlFor="level" className="text-sm font-semibold uppercase tracking-wide">
+          <label htmlFor="level" className="text-xs font-semibold uppercase tracking-wide text-primary/80">
             CEFR Level
           </label>
           <select
@@ -96,7 +126,7 @@ export function GenerateForm() {
             name="level"
             value={level}
             onChange={(event) => setLevel(event.target.value as (typeof levels)[number])}
-            className="rounded-lg border border-border bg-background/70 px-3 py-2 text-base shadow-sm transition hover:border-primary/60 focus:border-primary"
+            className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-base text-white shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/40"
           >
             {levels.map((option) => (
               <option key={option} value={option}>
@@ -106,43 +136,43 @@ export function GenerateForm() {
           </select>
         </div>
 
-        <NumberField
-          id="nCloze"
-          label="Cloze items"
-          value={nCloze}
-          onChange={setNCloze}
-        />
-
-        <NumberField
-          id="nVocab"
-          label="Vocab items"
-          value={nVocab}
-          onChange={setNVocab}
-        />
+        <NumberField id="nCloze" label="Cloze cards" value={nCloze} onChange={setNCloze} />
+        <NumberField id="nVocab" label="Vocab cards" value={nVocab} onChange={setNVocab} />
       </div>
 
       <div className="flex flex-col gap-3">
         <Button type="submit" disabled={disableSubmit} className={cn(disableSubmit && "opacity-70")}>
-          {isSubmitting ? "Generating..." : "Generate session"}
+          {isSubmitting ? "Creating context..." : "Create study context"}
         </Button>
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {error ? <p className="text-sm text-red-300">{error}</p> : null}
         {result ? (
-          <div className="rounded-lg border border-border bg-background/80 p-4 text-sm text-muted-foreground">
-            <p>
-              Added <strong>{result.createdCloze}</strong> cloze and{" "}
-              <strong>{result.createdVocab}</strong> vocab items.
+          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-4 text-sm text-emerald-50">
+            <p className="font-semibold text-white">
+              Created {result.context.title} ({result.context.level}).
             </p>
-            {result.skipped > 0 ? (
-              <p className="mt-1">
-                Skipped <strong>{result.skipped}</strong> duplicates (already in the deck).
+            <p className="mt-1">
+              Added <strong>{result.stats.createdCloze}</strong> cloze ·{" "}
+              <strong>{result.stats.createdVocab}</strong> vocab.
+            </p>
+            {result.stats.skipped > 0 ? (
+              <p className="mt-1 text-emerald-200/80">
+                Skipped {result.stats.skipped} duplicates already stored.
               </p>
             ) : null}
-            <Link
-              href="/study"
-              className="mt-3 inline-flex items-center text-primary underline underline-offset-4 hover:no-underline"
-            >
-              {"Go to Study ->"}
-            </Link>
+            <div className="mt-3 flex gap-4">
+              <Link
+                href={`/contexts/${result.context.id}`}
+                className="text-sm font-semibold text-emerald-200 underline underline-offset-4 hover:text-white"
+              >
+                Edit set
+              </Link>
+              <Link
+                href={`/study?contextId=${result.context.id}`}
+                className="text-sm font-semibold text-emerald-200 underline underline-offset-4 hover:text-white"
+              >
+                Study now →
+              </Link>
+            </div>
           </div>
         ) : null}
       </div>
@@ -163,19 +193,20 @@ function NumberField({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-semibold uppercase tracking-wide">
+      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wide text-primary/80">
         {label}
       </label>
       <input
         id={id}
         name={id}
         type="number"
-        min={1}
+        min={0}
         max={20}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="rounded-lg border border-border bg-background/70 px-3 py-2 text-base shadow-sm transition hover:border-primary/60 focus:border-primary"
+        className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-base text-white shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/40"
       />
+      <p className="text-xs text-slate-400">Set zero to skip this type for now.</p>
     </div>
   );
 }

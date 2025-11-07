@@ -1,6 +1,7 @@
 import { ItemType } from "@prisma/client";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "../../../lib/db";
+import { requireUser } from "../../../lib/auth";
 import type { StudyItem, VocabMetadata } from "../../../lib/types";
 
 const isFrequency = (value: unknown): value is VocabMetadata["frequency"] =>
@@ -37,15 +38,22 @@ const parseChoices = (type: ItemType, raw: unknown): StudyItem["choices"] => {
   return null;
 };
 
-export async function GET() {
+export const GET = requireUser(async (request: NextRequest, _ctx, user) => {
+  const contextId = request.nextUrl.searchParams.get("contextId") ?? undefined;
+
   const item = await prisma.item.findFirst({
     where: {
+      userId: user.id,
+      ...(contextId ? { contextId } : {}),
       due: {
         lte: new Date(),
       },
     },
     orderBy: {
       due: "asc",
+    },
+    include: {
+      context: true,
     },
   });
 
@@ -55,13 +63,18 @@ export async function GET() {
 
   const responsePayload: StudyItem = {
     id: item.id,
+    contextId: item.contextId,
+    contextTitle: item.context.title,
     type: item.type,
     prompt: item.prompt,
     choices: parseChoices(item.type, item.choices),
     answer: item.answer,
     explanation: item.explanation,
     lemma: item.lemma,
+    ease: item.ease,
+    interval: item.interval,
+    due: item.due.toISOString(),
   };
 
   return NextResponse.json(responsePayload);
-}
+});

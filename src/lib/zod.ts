@@ -2,18 +2,43 @@ import { z } from "zod";
 
 export const LevelSchema = z.enum(["A1", "A2", "B1", "B2", "C1"]);
 
-export const GenerateRequestSchema = z
+export const CreateContextSchema = z.object({
+  title: z.string().min(3).max(80),
+  description: z.string().min(10).max(600),
+  level: LevelSchema,
+  nCloze: z.number().int().min(0).max(20).default(6),
+  nVocab: z.number().int().min(0).max(20).default(6),
+});
+
+export const UpdateContextSchema = z
   .object({
-    context: z.string().min(3, "Context must be at least 3 characters."),
-    level: LevelSchema,
-    nCloze: z.number().int().positive().max(20).optional(),
-    nVocab: z.number().int().positive().max(20).optional(),
+    title: z.string().min(3).max(80).optional(),
+    notes: z.string().min(0).max(1000).optional(),
+    level: LevelSchema.optional(),
   })
-  .transform((data) => ({
-    ...data,
-    nCloze: data.nCloze ?? 8,
-    nVocab: data.nVocab ?? 8,
-  }));
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Provide at least one field to update.",
+  });
+
+export const GenerateMoreSchema = z
+  .object({
+    nCloze: z.number().int().min(0).max(20).default(3),
+    nVocab: z.number().int().min(0).max(20).default(3),
+  })
+  .refine((data) => data.nCloze > 0 || data.nVocab > 0, {
+    message: "Specify at least one item to generate.",
+  });
+
+export const RemoveItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1),
+});
+
+export const ContextListQuerySchema = z.object({
+  q: z.string().optional(),
+  level: LevelSchema.optional(),
+  cursor: z.string().optional(),
+  take: z.coerce.number().int().min(1).max(50).default(20).optional(),
+});
 
 export const ClozeItemSchema = z.object({
   sentence_with_blank: z.string().min(1),
@@ -67,7 +92,9 @@ export const ReviewRequestSchema = z.object({
 });
 
 export type Level = z.infer<typeof LevelSchema>;
-export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 export type ClozeItem = z.infer<typeof ClozeItemSchema>;
 export type VocabItem = z.infer<typeof VocabItemSchema>;
 export type NormalizedItem = z.infer<typeof NormalizedItemSchema>;
+export type CreateContextInput = z.infer<typeof CreateContextSchema>;
+export type UpdateContextInput = z.infer<typeof UpdateContextSchema>;
+export type GenerateMoreInput = z.infer<typeof GenerateMoreSchema>;

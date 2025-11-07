@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Grade } from "../lib/sm2";
 import type { StudyItem, VocabMetadata } from "../lib/types";
+import { formatDate } from "../lib/utils";
 import { ClozeCard } from "./ClozeCard";
 import { GradeBar } from "./GradeBar";
 import { VocabCard } from "./VocabCard";
@@ -38,20 +39,28 @@ export function StudyCard({
   }
 
   return (
-    <div className="space-y-6 rounded-xl border border-border bg-secondary/30 p-6 shadow-lg">
-      <header className="flex items-center justify-between">
-        <span className="rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-          {item.type === "CLOZE" ? "Cloze" : "Vocabulary"}
-        </span>
-        {wasCorrect !== null ? (
-          <span
-            className={`text-sm font-semibold ${
-              wasCorrect ? "text-emerald-400" : "text-red-400"
-            }`}
-          >
-            {wasCorrect ? "Correct" : "Incorrect"}
+    <div className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{item.contextTitle}</p>
+          <p className="text-sm text-slate-300">
+            Due {formatDate(item.due)} · Interval {item.interval}d · Ease {item.ease.toFixed(2)}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+            {item.type === "CLOZE" ? "Cloze" : "Vocabulary"}
           </span>
-        ) : null}
+          {wasCorrect !== null ? (
+            <span
+              className={`text-sm font-semibold ${
+                wasCorrect ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {wasCorrect ? "Correct" : "Incorrect"}
+            </span>
+          ) : null}
+        </div>
       </header>
 
       {item.type === "CLOZE" && Array.isArray(item.choices) ? (
