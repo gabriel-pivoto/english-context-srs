@@ -94,7 +94,13 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const baseUrl = (process.env.APP_BASE_URL ?? "http://localhost:3005").replace(/\/$/, "");
+  const candidateUrl =
+    process.env.APP_BASE_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ||
+    "http://localhost:3005";
+
+  const baseUrl = candidateUrl.replace(/\/$/, "");
   const magicLink = `${baseUrl}/api/auth/callback?token=${token}`;
 
   try {
